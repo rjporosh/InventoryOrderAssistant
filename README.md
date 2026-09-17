@@ -9,6 +9,13 @@ list_tables  ->  describe_table  ->  execute_query  ->  (repeat)  ->  answer
 
 No sub-agents, no orchestrator. One agent, one loop.
 
+The agent keeps the conversation in memory across questions within a session, so a
+follow-up question ("what about last month?") is understood in the context of what
+was already asked and answered. Type `new` (or `reset`) at the prompt to start a
+fresh conversation. History is capped (`Agent:MaxHistoryMessages`, default `40`
+messages) so long sessions don't grow the prompt unboundedly — oldest turns are
+dropped first while the system prompt is always kept.
+
 ## Project layout
 
 | Path | Purpose |
@@ -66,6 +73,12 @@ USB-C Cable 1m (6), Mechanical Keyboard (3), Laptop Stand (9).
 > How many orders has Rafi Ahmed placed, and what's the total value?
 Rafi Ahmed has placed 3 orders totalling $110.50.
 
+> And how many of those were in the last 30 days?
+2 of Rafi Ahmed's 3 orders were placed in the last 30 days.
+
+> new
+Conversation context cleared.
+
 > exit
 ```
 
@@ -85,6 +98,7 @@ Rafi Ahmed has placed 3 orders totalling $110.50.
 | `Database:MaxRows`              | `200` | Max rows returned to the model. |
 | `Agent:Model`                   | `gpt-4.1` | OpenAI chat model. |
 | `Agent:MaxIterations`           | `10` | Max loop turns before giving up. |
+| `Agent:MaxHistoryMessages`      | `40` | Max conversation messages kept in memory before the oldest turns are trimmed. |
 | `OPENAI_API_KEY` (env)          | — | Required. |
 
 ## Troubleshooting

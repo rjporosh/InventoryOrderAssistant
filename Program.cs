@@ -15,6 +15,7 @@ var dbOptions = config.GetSection("Database").Get<DatabaseOptions>()
     ?? throw new InvalidOperationException("Missing 'Database' configuration section.");
 var model = config["Agent:Model"] ?? "gpt-4.1";
 var maxIterations = int.TryParse(config["Agent:MaxIterations"], out var m) ? m : 10;
+var maxHistoryMessages = int.TryParse(config["Agent:MaxHistoryMessages"], out var h) ? h : 40;
 
 var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 if (string.IsNullOrWhiteSpace(apiKey))
@@ -47,9 +48,10 @@ IChatClient chatClient = new OpenAIClient(apiKey)
     .GetChatClient(model)
     .AsIChatClient();
 
-var agent = new InventoryAgent(chatClient, functions, maxIterations);
+var agent = new InventoryAgent(chatClient, functions, maxIterations, maxHistoryMessages);
 
-Console.WriteLine("Inventory & Order Assistant  (type 'exit' to quit)");
+Console.WriteLine("Inventory & Order Assistant  (type 'exit' to quit, 'new' to start a fresh conversation)");
+Console.WriteLine("The assistant remembers earlier questions in this session, so follow-ups can refer back to them.");
 Console.WriteLine();
 
 while (true)
@@ -61,6 +63,14 @@ while (true)
         break;
     if (string.IsNullOrWhiteSpace(question))
         continue;
+    if (string.Equals(question, "new", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(question, "reset", StringComparison.OrdinalIgnoreCase))
+    {
+        agent.ResetConversation();
+        Console.WriteLine("Conversation context cleared.");
+        Console.WriteLine();
+        continue;
+    }
 
     try
     {

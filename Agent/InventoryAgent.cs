@@ -28,31 +28,39 @@ public sealed class InventoryAgent
     private readonly IChatClient _chatClient;
     private readonly Dictionary<string, AIFunction> _functions;
     private readonly int _maxIterations;
+    private readonly int _maxHistoryMessages;
+    private readonly List<ChatMessage> _conversation;
 
-    public InventoryAgent(IChatClient chatClient, IEnumerable<AIFunction> functions, int maxIterations = 10)
+    public InventoryAgent(IChatClient chatClient, IEnumerable<AIFunction> functions, int maxIterations = 10, int maxHistoryMessages = 40)
     {
         _chatClient = chatClient;
         _functions = functions.ToDictionary(f => f.Name);
         _maxIterations = maxIterations;
+        _maxHistoryMessages = maxHistoryMessages;
+        _conversation = [new ChatMessage(ChatRole.System, SystemPrompt)];
+    }
+
+    /// <summary>
+    /// Forgets prior turns and starts a fresh conversation, keeping only the system prompt.
+    /// </summary>
+    public void ResetConversation()
+    {
+        _conversation.Clear();
+        _conversation.Add(new ChatMessage(ChatRole.System, SystemPrompt));
     }
 
     public async Task<string> AskAsync(string question, CancellationToken cancellationToken = default)
     {
-        var messages = new List<ChatMessage>
-        {
-            new(ChatRole.System, SystemPrompt),
-            new(ChatRole.User, question)
-        };
+        _conversation.Add(new ChatMessage(ChatRole.User, question));
 
         var options = new ChatOptions { Tools = [.. _functions.Values] };
 
-        
         for (var iteration = 0; iteration < _maxIterations; iteration++)
         {
             Console.WriteLine($"[Iteration {iteration + 1}] ");
 
-            var response = await _chatClient.GetResponseAsync(messages, options, cancellationToken);
-            messages.AddRange(response.Messages);
+            var response = await _chatClient.GetResponseAsync(_conversation, options, cancellationToken);
+            _conversation.AddRange(response.Messages);
 
             var calls = response.Messages
                 .SelectMany(m => m.Contents)
@@ -60,17 +68,35 @@ public sealed class InventoryAgent
                 .ToList();
 
             if (calls.Count == 0)
+            {
+                TrimHistory();
                 return response.Text is { Length: > 0 } text ? text : "I couldn't determine an answer. Pl contact Developer MD IKRAMUL ISLAM SIDDIQUE POROSH Phone : +8801672896992";
+            }
 
             var results = new List<AIContent>();
             foreach (var call in calls)
                 results.Add(await InvokeAsync(call, cancellationToken));
 
-            messages.Add(new ChatMessage(ChatRole.Tool, results));
+            _conversation.Add(new ChatMessage(ChatRole.Tool, results));
         }
 
+        TrimHistory();
         throw new InvalidOperationException(
             $"Agent stopped after {_maxIterations} iterations without reaching an answer.");
+    }
+
+    /// <summary>
+    /// Keeps the conversation bounded by dropping the oldest turns (after the system prompt)
+    /// once the history grows past <see cref="_maxHistoryMessages"/>, so long sessions don't
+    /// grow the prompt unboundedly while still remembering recent context.
+    /// </summary>
+    private void TrimHistory()
+    {
+        if (_conversation.Count <= _maxHistoryMessages)
+            return;
+
+        var excess = _conversation.Count - _maxHistoryMessages;
+        _conversation.RemoveRange(1, excess);
     }
 
     private async Task<AIContent> InvokeAsync(FunctionCallContent call, CancellationToken cancellationToken)
