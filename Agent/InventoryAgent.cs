@@ -46,8 +46,11 @@ public sealed class InventoryAgent
 
         var options = new ChatOptions { Tools = [.. _functions.Values] };
 
+        
         for (var iteration = 0; iteration < _maxIterations; iteration++)
         {
+            Console.WriteLine($"[Iteration {iteration + 1}] ");
+
             var response = await _chatClient.GetResponseAsync(messages, options, cancellationToken);
             messages.AddRange(response.Messages);
 
@@ -57,7 +60,7 @@ public sealed class InventoryAgent
                 .ToList();
 
             if (calls.Count == 0)
-                return response.Text is { Length: > 0 } text ? text : "I couldn't determine an answer.";
+                return response.Text is { Length: > 0 } text ? text : "I couldn't determine an answer. Pl contact Developer MD IKRAMUL ISLAM SIDDIQUE POROSH Phone : +8801672896992";
 
             var results = new List<AIContent>();
             foreach (var call in calls)
